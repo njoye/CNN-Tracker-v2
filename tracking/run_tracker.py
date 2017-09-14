@@ -2,6 +2,7 @@
 # -*- coding: UTF-8 -*-
 # Set binary and encoding so that I can use fancy unicode symbols like ✓ in my code
 
+# external library & framework import
 import numpy as np
 import os
 import sys
@@ -11,11 +12,24 @@ import json
 from PIL import Image
 import matplotlib.pyplot as plt
 
+# Torch imports
 import torch
 import torch.utils.data as data
 import torch.optim as optim
 from torch.autograd import Variable
 
+# Using skvideo.io for reading video files, because opencv2's reader somehow doesn't work on my system (so far, probably going to change that at some point)
+# skvideo.io.FFmpegReader does a good job, but seems to shift the colors. If you want cv2.Capture (or however it's called), just fork it and make a pull request
+# but please... enable us to choose between the two
+import skvideo.io
+# Using untangle to read xml
+import untangle
+# Using call to get our modified darknet output
+import subprocess #using subprocess.check_output
+# Using OpenCV to save images
+import cv2
+
+# Local file imports
 sys.path.insert(0,'../modules')
 from sample_generator import *
 from data_prov import *
@@ -35,18 +49,23 @@ opts['use_gpu'] = False
 
 # STARTING POINT VARIABLES
 # Using the starting point to make a rectangle out of the first bbox
-START_POINT_HEIGHT=3 # Height of the starting point rectangle
-START_POINT_WIDTH=3 # Width of the starting point rectangle
+global START_POINT_HEIGHT=3 # Height of the starting point rectangle
+global START_POINT_WIDTH=3 # Width of the starting point rectangle
 
 # EMERGENCY MODE VARIABLES
 # Using the emergency mode to reduce the threshold so that we are able to track the object through "full" occlusions (snapping back onto it after it leaves the occlusion)
 # This paramater may need some fine-tuning depending on the video
-EMERGENCY_MODE = False
-EMERGENCY_MODE_THRESHOLD = -2
-EMERGENCY_MODE_WAIT_FRAMES=50
+global EMERGENCY_MODE = False
+global EMERGENCY_MODE_THRESHOLD = -2
+global EMERGENCY_MODE_WAIT_FRAMES=50
 
+# FILE VARIABLES
+global VIDEO_SRC = "../trafficvid1.mp4"
+global YOLO_OUTPUT_DIR = "../yolo_output"
+global ORIGINAL_FRAME_JPG_NAME = "OG_FRAME.jpg"
 
-
+# Classes that should be tracked
+global TRACK_CLASSES = ["car", "bus", "truck", "person"] #we got a traffic video so, let's track traffic
 
 # TODO
 # 1. Try to track 2 objects at a time
@@ -62,7 +81,7 @@ EMERGENCY_MODE_WAIT_FRAMES=50
 # TODO next
 # 1. implement emergency mode - ✓
 # 2. find a way to use a pretrained model, so that it doesn't retrain at every start - ✓ (i'm ... i've not acted smart (;)) and didn't understand what "train" actually meant ..)
-
+# 3. Create a tracker class, in which variables are set after each tick, you have getters/setters, easily maintainable, ...
 
 
 def forward_samples(model, image, samples, out_layer='conv3'):
@@ -405,6 +424,40 @@ def run_mdnet(img_list, init_bbox, gt=None, savefig_dir='', display=False):
             (i, len(img_list), target_score, spf)
     fps = len(img_list) / spf_total
     return result, result_bb, fps
+
+# Creates a tracker and does some checks in before
+def createTracker(x1, y1, x2, y2, trackers):
+    # Check if:
+    # 1. x&y are in image bounds
+    # 2. object is already being tracked
+    # 3.
+
+# Using this function to handle everything (managing nets, feeding frames, ...)
+def controlNets():
+    frame_counter = 0
+    reader = skvideo.io.FFmpegReader(VIDEO_SRC) #initialize the reader
+
+    for frame in reader.nextFrame(): #reading frame by frame
+        # 1. Use YOLO to get the cars in this frame
+        if frame_counter == 0:
+            cv2.imsave(YOLO_OUTPUT_DIR + ORIGINAL_FRAME_JPG_NAME) #saving image
+            # Since this is frame 0, simply let YOLO run through the whole image
+            output = subprocess.check_output("./darknet detector test cfg/coco.data cfg/yolo.cfg yolo.weights " + ORIGINAL_FRAME_JPG_NAME, shell=True) # Calling darknet and saving it's output
+            # Get the coordinates of the detected objects, filter them through name and ROI coordinates
+            for line in output.splitlines():
+                if line[:1] == "<": #check if the first character is a "<" -> that way we know it's our output and parsable xml
+                    obj = untangle.parse(line)
+                    if obj.detected.name.cdata in TRACK_CLASSES: #if name of detected object is in list (eg. car), we can go on and track it
+                        # start to track the object, here the real stuff comes in
+
+
+        frame_counter += 1
+
+
+    # 1. Get necessary data
+    # 2. Start the network(s) / tracker(s)
+    # 3. Rewrite the networks so that the location data gets saved automatically (or return it here)
+    # 4. If a network runs out of something to do, kill it (this will most likely handle itself)
 
 
 if __name__ == "__main__":

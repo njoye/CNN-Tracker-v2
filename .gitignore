@@ -6,3 +6,6 @@ modules/*.pyc
 pretrain/*.pyc
 tracking/*.pyc
 models/imagenet-vgg-m.mat
+trafficvid1.mp4
+*.mp4
+*/.DS_STORE
