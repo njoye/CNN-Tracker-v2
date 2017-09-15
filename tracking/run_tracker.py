@@ -29,6 +29,8 @@ import subprocess #using subprocess.check_output
 # Using OpenCV to save images
 import cv2
 
+import multiprocessing as mp #mutlithreading and asynchronous calls, yay ...
+
 # Local file imports
 sys.path.insert(0,'../modules')
 from sample_generator import *
@@ -38,34 +40,35 @@ from bbreg import *
 from options import *
 from gen_config import *
 
+from Tracker import Tracker #my own module *.*
+
 np.random.seed(123)
 torch.manual_seed(456)
 #torch.cuda.manual_seed(789)
 
-opts['use_gpu'] = False
-
 # My variables, let's make this thing more ... adaptable in look and fell as well as algorythm behavior
-
 
 # STARTING POINT VARIABLES
 # Using the starting point to make a rectangle out of the first bbox
-global START_POINT_HEIGHT=3 # Height of the starting point rectangle
-global START_POINT_WIDTH=3 # Width of the starting point rectangle
+START_POINT_HEIGHT =  3 # Height of the starting point rectangle
+START_POINT_WIDTH = 3 # Width of the starting point rectangle
 
 # EMERGENCY MODE VARIABLES
 # Using the emergency mode to reduce the threshold so that we are able to track the object through "full" occlusions (snapping back onto it after it leaves the occlusion)
 # This paramater may need some fine-tuning depending on the video
-global EMERGENCY_MODE = False
-global EMERGENCY_MODE_THRESHOLD = -2
-global EMERGENCY_MODE_WAIT_FRAMES=50
+EMERGENCY_MODE = False
+EMERGENCY_MODE_THRESHOLD = -2
+EMERGENCY_MODE_WAIT_FRAMES=50
 
 # FILE VARIABLES
-global VIDEO_SRC = "../trafficvid1.mp4"
-global YOLO_OUTPUT_DIR = "../yolo_output"
-global ORIGINAL_FRAME_JPG_NAME = "OG_FRAME.jpg"
+VIDEO_SRC = "../trafficvid1.mp4"
+YOLO_OUTPUT_DIR = "../yolo_output"
+ORIGINAL_FRAME_JPG_NAME = "OG_FRAME.jpg"
+
+ALL_TRACKERS = []
 
 # Classes that should be tracked
-global TRACK_CLASSES = ["car", "bus", "truck", "person"] #we got a traffic video so, let's track traffic
+TRACK_CLASSES = ["car", "bus", "truck", "person"] #we got a traffic video so, let's track traffic
 
 # TODO
 # 1. Try to track 2 objects at a time
@@ -84,104 +87,8 @@ global TRACK_CLASSES = ["car", "bus", "truck", "person"] #we got a traffic video
 # 3. Create a tracker class, in which variables are set after each tick, you have getters/setters, easily maintainable, ...
 
 
-def forward_samples(model, image, samples, out_layer='conv3'):
-    model.eval()
-    extractor = RegionExtractor(image, samples, opts['img_size'], opts['padding'], opts['batch_test'])
-    for i, regions in enumerate(extractor):
-        regions = Variable(regions)
-        if opts['use_gpu']:
-            regions = regions.cuda()
-        feat = model(regions, out_layer=out_layer)
-        if i==0:
-            feats = feat.data.clone() #somehow this f*cks up if there are certian groundtruth_rect.txt coordinates given (mine didn't work, TODO investigate this later)
-        else:
-            feats = torch.cat((feats,feat.data.clone()),0)
-    return feats
 
-
-def set_optimizer(model, lr_base, lr_mult=opts['lr_mult'], momentum=opts['momentum'], w_decay=opts['w_decay']):
-    params = model.get_learnable_params()
-    param_list = []
-    for k, p in params.iteritems():
-        lr = lr_base
-        for l, m in lr_mult.iteritems():
-            if k.startswith(l):
-                lr = lr_base * m
-        param_list.append({'params': [p], 'lr':lr})
-    optimizer = optim.SGD(param_list, lr = lr, momentum=momentum, weight_decay=w_decay)
-    return optimizer
-
-
-def train(model, criterion, optimizer, pos_feats, neg_feats, maxiter, in_layer='fc4'):
-    model.train()
-
-    batch_pos = opts['batch_pos']
-    batch_neg = opts['batch_neg']
-    batch_test = opts['batch_test']
-    batch_neg_cand = max(opts['batch_neg_cand'], batch_neg)
-
-    pos_idx = np.random.permutation(pos_feats.size(0))
-    neg_idx = np.random.permutation(neg_feats.size(0))
-    while(len(pos_idx) < batch_pos*maxiter):
-        pos_idx = np.concatenate([pos_idx, np.random.permutation(pos_feats.size(0))])
-    while(len(neg_idx) < batch_neg_cand*maxiter):
-        neg_idx = np.concatenate([neg_idx, np.random.permutation(neg_feats.size(0))])
-    pos_pointer = 0
-    neg_pointer = 0
-
-    for iter in range(maxiter):
-
-        # select pos idx
-        pos_next = pos_pointer+batch_pos
-        pos_cur_idx = pos_idx[pos_pointer:pos_next]
-        pos_cur_idx = pos_feats.new(pos_cur_idx).long()
-        pos_pointer = pos_next
-
-        # select neg idx
-        neg_next = neg_pointer+batch_neg_cand
-        neg_cur_idx = neg_idx[neg_pointer:neg_next]
-        neg_cur_idx = neg_feats.new(neg_cur_idx).long()
-        neg_pointer = neg_next
-
-        # create batch
-        batch_pos_feats = Variable(pos_feats.index_select(0, pos_cur_idx))
-        batch_neg_feats = Variable(neg_feats.index_select(0, neg_cur_idx))
-
-        # hard negative mining
-        if batch_neg_cand > batch_neg:
-            model.eval()
-            for start in range(0,batch_neg_cand,batch_test):
-                end = min(start+batch_test,batch_neg_cand)
-                score = model(batch_neg_feats[start:end], in_layer=in_layer)
-                if start==0:
-                    neg_cand_score = score.data[:,1].clone()
-                else:
-                    neg_cand_score = torch.cat((neg_cand_score, score.data[:,1].clone()),0)
-
-            _, top_idx = neg_cand_score.topk(batch_neg)
-            batch_neg_feats = batch_neg_feats.index_select(0, Variable(top_idx))
-            model.train()
-
-        # forward
-        pos_score = model(batch_pos_feats, in_layer=in_layer)
-        neg_score = model(batch_neg_feats, in_layer=in_layer)
-
-        # optimize
-        loss = criterion(pos_score, neg_score)
-        model.zero_grad()
-        loss.backward()
-        torch.nn.utils.clip_grad_norm(model.parameters(), opts['grad_clip'])
-        optimizer.step()
-
-        #print "Iter %d, Loss %.4f" % (iter, loss.data[0])
-
-
-
-
-
-# "Tracker"-Function, this trains the
 def run_mdnet(img_list, init_bbox, gt=None, savefig_dir='', display=False):
-
     # Init bbox
     target_bbox = np.array(init_bbox)
     result = np.zeros((len(img_list),4))
@@ -425,42 +332,44 @@ def run_mdnet(img_list, init_bbox, gt=None, savefig_dir='', display=False):
     fps = len(img_list) / spf_total
     return result, result_bb, fps
 
-# Creates a tracker and does some checks in before
-def createTracker(x1, y1, x2, y2, trackers):
-    # Check if:
-    # 1. x&y are in image bounds
-    # 2. object is already being tracked
-    # 3.
 
-# Using this function to handle everything (managing nets, feeding frames, ...)
-def controlNets():
-    frame_counter = 0
-    reader = skvideo.io.FFmpegReader(VIDEO_SRC) #initialize the reader
+# 1. Get necessary data
+# 2. Start the network(s) / tracker(s)
+# 3. Rewrite the networks so that the location data gets saved automatically (or return it here)
+# 4. If a network runs out of something to do, kill it (this will most likely handle itself)
 
-    for frame in reader.nextFrame(): #reading frame by frame
-        # 1. Use YOLO to get the cars in this frame
-        if frame_counter == 0:
-            cv2.imsave(YOLO_OUTPUT_DIR + ORIGINAL_FRAME_JPG_NAME) #saving image
-            # Since this is frame 0, simply let YOLO run through the whole image
-            output = subprocess.check_output("./darknet detector test cfg/coco.data cfg/yolo.cfg yolo.weights " + ORIGINAL_FRAME_JPG_NAME, shell=True) # Calling darknet and saving it's output
-            # Get the coordinates of the detected objects, filter them through name and ROI coordinates
-            for line in output.splitlines():
-                if line[:1] == "<": #check if the first character is a "<" -> that way we know it's our output and parsable xml
-                    obj = untangle.parse(line)
-                    if obj.detected.name.cdata in TRACK_CLASSES: #if name of detected object is in list (eg. car), we can go on and track it
-                        # start to track the object, here the real stuff comes in
+# Callback that gets run when the tracker finishes with his startup routine (training, etc.)
+def startTrackerCallback(result):
+    #print("Started tracker: " + str(tracker))
+    print("Result -> " + str(result))
+    # use Tracker.updateFrame for the first time here, afterwards "udpateFrameCallback" will handle that
+
+# Callback that gets run when the tracker finished analyzing the given frame
+def updateFrameCallback(tracker, nextFrameNumber):
+    print("Updating frame: " + str(tracker) + " at frame: " + str(nextFrameNumber))
 
 
-        frame_counter += 1
 
 
-    # 1. Get necessary data
-    # 2. Start the network(s) / tracker(s)
-    # 3. Rewrite the networks so that the location data gets saved automatically (or return it here)
-    # 4. If a network runs out of something to do, kill it (this will most likely handle itself)
+def test(test):
+    print("test")
+
+
+
+# Everything is started and controlled from here ... i at least hope so
+def main(img_list, init_bbox, savefig_dir, display, result_path):
+    pool = mp.Pool()
+    for i in range(1):
+        tracker = Tracker()
+        pool.apply_async(tracker.test, args = (), callback = startTrackerCallback)
+        #pool.apply_async(startTrackerCallback, args = (i, ), callback = callback)
+    pool.close()
+    pool.join()
 
 
 if __name__ == "__main__":
+
+
 
     parser = argparse.ArgumentParser()
     parser.add_argument('-s', '--seq', default='', help='input seq')
@@ -477,16 +386,12 @@ if __name__ == "__main__":
 
     # Generate sequence config -> basically just some configuration parameters
     img_list, init_bbox, gt, savefig_dir, display, result_path = gen_config(args)
-
-    # Run Tracker
-    # TODO check if it is possible to multiply this tracker
-    result, result_bb, fps = run_mdnet(img_list, init_bbox, gt=gt, savefig_dir=savefig_dir, display=display)
-
+    main(img_list, init_bbox, savefig_dir, display, result_path)
 
 
     # Save result
-    res = {}
-    res['res'] = result_bb.round().tolist()
-    res['type'] = 'rect'
-    res['fps'] = fps
-    json.dump(res, open(result_path, 'w'), indent=2)
+    #res = {}
+    #res['res'] = result_bb.round().tolist()
+    #res['type'] = 'rect'
+    #res['fps'] = fps
+    #json.dump(res, open(result_path, 'w'), indent=2)

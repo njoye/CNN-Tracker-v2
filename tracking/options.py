@@ -1,7 +1,7 @@
 from collections import OrderedDict
 
 opts = OrderedDict()
-opts['use_gpu'] = True
+opts['use_gpu'] = False
 
 opts['model_path'] = '../models/mdnet_vot-otb.pth'
 
