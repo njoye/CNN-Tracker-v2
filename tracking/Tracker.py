@@ -18,6 +18,7 @@ from torch.autograd import Variable
 # Using OpenCV to save images
 import cv2
 
+import asyncio
 
 # Local file imports
 sys.path.insert(0,'../modules')
@@ -27,6 +28,8 @@ from model import *
 from bbreg import *
 from options import *
 from gen_config import *
+
+
 
 # Own
 from TrackerUtils import *
@@ -91,7 +94,7 @@ class Tracker:
         print("inited")
         pass
 
-    def test():
+    def test(self):
         print("classtest")
 
     # Initiates the tracker with either coordinates["start"] or given parameters

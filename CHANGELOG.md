@@ -17,3 +17,4 @@
 
 15/09/17
 - Figured that indentation is important in python (srsly, spent 20 minutes on figuring out why some functions didn't work)
+- Async sucks (as it already did in JS, but at least I knew how to properly do it there)

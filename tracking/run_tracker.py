@@ -29,7 +29,7 @@ import subprocess #using subprocess.check_output
 # Using OpenCV to save images
 import cv2
 
-import multiprocessing as mp #mutlithreading and asynchronous calls, yay ...
+import asyncio # asynchronous calls #yay
 
 # Local file imports
 sys.path.insert(0,'../modules')
@@ -327,7 +327,7 @@ def run_mdnet(img_list, init_bbox, gt=None, savefig_dir='', display=False):
                 print("Saved figure ("+str(i).zfill(4)+".jpg).")
 
             # Not printing overlap of gt_rect and rect because gt_rect serves the sole purpose of setting our starting point
-            print "Frame %d/%d, Score %.3f, Time %.3f" % \
+            #print("Frame %d/%d, Score %.3f, Time %.3f")
             (i, len(img_list), target_score, spf)
     fps = len(img_list) / spf_total
     return result, result_bb, fps
@@ -348,29 +348,19 @@ def startTrackerCallback(result):
 def updateFrameCallback(tracker, nextFrameNumber):
     print("Updating frame: " + str(tracker) + " at frame: " + str(nextFrameNumber))
 
-
-
-
-def test(test):
-    print("test")
-
-
+async def testing(img_list, init_bbox):
+    print("1")
+    tracker = Tracker()
+    print("2")
+    tracker.startTracking(img_list, init_bbox)
+    print("3")
 
 # Everything is started and controlled from here ... i at least hope so
 def main(img_list, init_bbox, savefig_dir, display, result_path):
-    pool = mp.Pool()
-    for i in range(1):
-        tracker = Tracker()
-        pool.apply_async(tracker.test, args = (), callback = startTrackerCallback)
-        #pool.apply_async(startTrackerCallback, args = (i, ), callback = callback)
-    pool.close()
-    pool.join()
+    pass
 
 
 if __name__ == "__main__":
-
-
-
     parser = argparse.ArgumentParser()
     parser.add_argument('-s', '--seq', default='', help='input seq')
     parser.add_argument('-j', '--json', default='', help='input json')
@@ -388,6 +378,12 @@ if __name__ == "__main__":
     img_list, init_bbox, gt, savefig_dir, display, result_path = gen_config(args)
     main(img_list, init_bbox, savefig_dir, display, result_path)
 
+    #async testing
+    ioloop = asyncio.get_event_loop()
+    tasks = [ioloop.create_task(testing(img_list[0], init_bbox))]
+    wait_tasks = asyncio.wait(tasks)
+    ioloop.run_until_complete(wait_tasks)
+    ioloop.close()
 
     # Save result
     #res = {}
