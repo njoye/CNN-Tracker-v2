@@ -42,9 +42,9 @@ def forward_samples(model, image, samples, out_layer='conv3'):
 def set_optimizer(model, lr_base, lr_mult=opts['lr_mult'], momentum=opts['momentum'], w_decay=opts['w_decay']):
     params = model.get_learnable_params()
     param_list = []
-    for k, p in params.iteritems():
+    for k, p in params.items():
         lr = lr_base
-        for l, m in lr_mult.iteritems():
+        for l, m in lr_mult.items():
             if k.startswith(l):
                 lr = lr_base * m
         param_list.append({'params': [p], 'lr':lr})
@@ -74,6 +74,7 @@ def train(model, criterion, optimizer, pos_feats, neg_feats, maxiter, in_layer='
         # select pos idx
         pos_next = pos_pointer+batch_pos
         pos_cur_idx = pos_idx[pos_pointer:pos_next]
+        print(pos_cur_idx)
         pos_cur_idx = pos_feats.new(pos_cur_idx).long()
         pos_pointer = pos_next
 

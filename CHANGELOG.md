@@ -18,3 +18,7 @@
 15/09/17
 - Figured that indentation is important in python (srsly, spent 20 minutes on figuring out why some functions didn't work)
 - Async sucks (as it already did in JS, but at least I knew how to properly do it there)
+
+18/09/17
+- Async doesn't suck as much, thought the bug was async-related, was actually python3 related. So ... Python sucks (i guess?) -> fixed it though, ```iteritems()->items()```
+- Also want to note that OSX sucks. Trying this on a Windows computer now, if that doesn't work I'll install Ubuntu ...

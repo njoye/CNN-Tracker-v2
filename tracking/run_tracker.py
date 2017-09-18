@@ -29,7 +29,7 @@ import subprocess #using subprocess.check_output
 # Using OpenCV to save images
 import cv2
 
-import asyncio # asynchronous calls #yay
+import multiprocessing as mp # asynchronous calls #yay
 
 # Local file imports
 sys.path.insert(0,'../modules')
@@ -348,12 +348,7 @@ def startTrackerCallback(result):
 def updateFrameCallback(tracker, nextFrameNumber):
     print("Updating frame: " + str(tracker) + " at frame: " + str(nextFrameNumber))
 
-async def testing(img_list, init_bbox):
-    print("1")
-    tracker = Tracker()
-    print("2")
-    tracker.startTracking(img_list, init_bbox)
-    print("3")
+
 
 # Everything is started and controlled from here ... i at least hope so
 def main(img_list, init_bbox, savefig_dir, display, result_path):
@@ -378,12 +373,18 @@ if __name__ == "__main__":
     img_list, init_bbox, gt, savefig_dir, display, result_path = gen_config(args)
     main(img_list, init_bbox, savefig_dir, display, result_path)
 
-    #async testing
-    ioloop = asyncio.get_event_loop()
-    tasks = [ioloop.create_task(testing(img_list[0], init_bbox))]
-    wait_tasks = asyncio.wait(tasks)
-    ioloop.run_until_complete(wait_tasks)
-    ioloop.close()
+    tracker = Tracker()
+    tracker.startTracking(img_list[0], init_bbox)
+
+    #pool = mp.Pool()
+
+    #tracker = Tracker()
+
+    #handler = pool.apply_async(tracker.startTracking, args = (img_list[0], init_bbox, ), callback = startTrackerCallback)
+    #handler.get()
+    #pool.close()
+    #pool.join()
+
 
     # Save result
     #res = {}

@@ -100,6 +100,7 @@ class Tracker:
     # Initiates the tracker with either coordinates["start"] or given parameters
     #, x1=coordinates["start"]["x1"], y1=coordinates["start"]["y1"], x2=coordinates["start"]["x2"], y2=coordinates["start"]["y2"]
     def startTracking(self, frame, init_bbox):
+        print("Running startTracking()")
         # Init bbox
         self.target_bbox = np.array(init_bbox)
         self.result = np.zeros((DEFAULT_RESULT_LENGTH,4))
@@ -108,6 +109,8 @@ class Tracker:
 
         self.result[0] = self.target_bbox
         self.result_bb[0] = self.target_bbox
+
+        print("wat")
 
         # Init model
         self.model = MDNet(opts['model_path'])
