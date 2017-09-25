@@ -44,7 +44,7 @@ from Tracker import Tracker #my own module *.*
 
 np.random.seed(123)
 torch.manual_seed(456)
-#torch.cuda.manual_seed(789)
+torch.cuda.manual_seed(789)
 
 # My variables, let's make this thing more ... adaptable in look and fell as well as algorythm behavior
 
@@ -59,6 +59,13 @@ START_POINT_WIDTH = 3 # Width of the starting point rectangle
 EMERGENCY_MODE = False
 EMERGENCY_MODE_THRESHOLD = -2
 EMERGENCY_MODE_WAIT_FRAMES=50
+
+
+# FRAME INTERVAL VARIABLE
+ANALYZE_FRAME_INTERVAL=10 #every n'th frame will be used to classify, track, ...
+
+
+
 
 # FILE VARIABLES
 VIDEO_SRC = "../trafficvid1.mp4"
@@ -83,8 +90,9 @@ TRACK_CLASSES = ["car", "bus", "truck", "person"] #we got a traffic video so, le
 
 # TODO next
 # 1. implement emergency mode - ✓
-# 2. find a way to use a pretrained model, so that it doesn't retrain at every start - ✓ (i'm ... i've not acted smart (;)) and didn't understand what "train" actually meant ..)
+# 2. find a way to use a pretrained model, so that it doesn't retrain at every start - ✓ (i'm ... i've not been smart (;)) and didn't understand what "train" actually meant ..)
 # 3. Create a tracker class, in which variables are set after each tick, you have getters/setters, easily maintainable, ...
+#                                                                                                  ^^ haha sure ^^
 
 
 
@@ -375,6 +383,13 @@ if __name__ == "__main__":
 
     tracker = Tracker()
     tracker.startTracking(img_list[0], init_bbox)
+    print(img_list)
+    i=1
+
+    #iterating through all the pictures (temp)
+    while i < len(img_list):
+        tracker.updateFrame(img_list[i], i)
+        i=i+1
 
     #pool = mp.Pool()
 

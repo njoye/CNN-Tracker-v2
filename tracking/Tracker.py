@@ -81,6 +81,11 @@ class Tracker:
         self.bbreg_bbox = None
         self.result = None
         self.result_bb = None
+        self.feat_dim = None
+        self.criterion = None
+        self.update_optimizer = None
+
+
 
         # EMERGENCY MODE VARIABLES
         # Using the emergency mode to reduce the threshold so that we are able to track the object through "full" occlusions (snapping back onto it after it leaves the occlusion)
@@ -88,6 +93,8 @@ class Tracker:
         self.EMERGENCY_MODE = False
         self.EMERGENCY_MODE_THRESHOLD = -2
         self.EMERGENCY_MODE_WAIT_FRAMES = 50
+        self.EMERGENCY_MODE_FRAMES_COUNTER=0
+
 
         self.frameNumber = 0
 
@@ -115,16 +122,16 @@ class Tracker:
         # Init model
         self.model = MDNet(opts['model_path'])
         if opts['use_gpu']:
-            self.model = model.cuda()
+            self.model = self.model.cuda()
         else:
             print("Not using CUDA")
         self.model.set_learnable_params(opts['ft_layers'])
 
 
         # Init criterion and optimizer
-        criterion = BinaryLoss()
+        self.criterion = BinaryLoss()
         init_optimizer = set_optimizer(self.model, opts['lr_init'])
-        update_optimizer = set_optimizer(self.model, opts['lr_update'])
+        self.update_optimizer = set_optimizer(self.model, opts['lr_update'])
 
         tic = time.time()
         # Load first image
@@ -158,14 +165,14 @@ class Tracker:
         # Extract pos/neg features
         pos_feats = forward_samples(self.model, image, pos_examples)
         neg_feats = forward_samples(self.model, image, neg_examples)
-        feat_dim = pos_feats.size(-1)
+        self.feat_dim = pos_feats.size(-1)
         print("Extracted positive & negative features from examples.")
 
 
         # pos_feats/neg_feats contain the features that the convnet should look out for!
         print("Started model training.")
         # Initial training
-        train(self.model, criterion, init_optimizer, pos_feats, neg_feats, opts['maxiter_init']) #The model gets trained to watch those features
+        train(self.model, self.criterion, init_optimizer, pos_feats, neg_feats, opts['maxiter_init']) #The model gets trained to watch those features
         print("Finished model training.")
 
         # Init sample generators
@@ -178,10 +185,15 @@ class Tracker:
         self.pos_feats_all = [pos_feats[:opts['n_pos_update']]]
         self.neg_feats_all = [neg_feats[:opts['n_neg_update']]]
 
-        return true
+        #print(self.result)
+        #print(self.result_bb)
+
+
+        return True #self.result and self.result_bbox are already saved in this class, no reason to return them then
         #spf_total = time.time()-tic
 
         # Display disabled for now
+        # this uses result and result_bb to draw a box around the starting point
         #savefig = savefig_dir != ''
         #if display or savefig:
             #dpi = 80.0
@@ -203,6 +215,9 @@ class Tracker:
             #ax.add_patch(rect)
 
 
+
+
+
     # Updates the frame, runs the network over it, returns the location (if there is any)
     def updateFrame(self, frame, frameNumber):
         # Load image
@@ -217,6 +232,10 @@ class Tracker:
         target_score = top_scores.mean()
         self.target_bbox = samples[top_idx].mean(axis=0)
 
+        print(self.target_bbox)
+
+
+
         success = None
         # Enabling / Disabling EMERGENCY_MODE
         if target_score < opts['success_thr']:
@@ -224,6 +243,7 @@ class Tracker:
             self.EMERGENCY_MODE = True
             print("Enabled emergency mode, lowering threshold to: " + str(self.EMERGENCY_MODE_THRESHOLD))
             if self.EMERGENCY_MODE_FRAMES_COUNTER == self.EMERGENCY_MODE_WAIT_FRAMES:
+                self.result[frameNumber] = self.target_bbox
                 #the frame counter reached the end
                 # TODO kill this tracker
                 exit()
@@ -231,6 +251,7 @@ class Tracker:
 
             # setting success variable so that we actually run the code we want to run in emergency mode
             success = target_score > self.EMERGENCY_MODE_THRESHOLD
+            pass
         else:
             if self.EMERGENCY_MODE:
                 print("Disabled emergency mode, setting threshold back to: " + str(opts['success_thr'])) #printing disable message
@@ -268,7 +289,6 @@ class Tracker:
             self.result_bb = np.append(self.result_bb,[[0,0,0,0]], axis=0)
 
         # Save result
-        self.result[frameNumber] = self.target_bbox
         self.result_bb[frameNumber] = self.bbreg_bbox
 
         # Data collectd
@@ -295,60 +315,42 @@ class Tracker:
         # Short term update
         if not success:
             nframes = min(opts['n_frames_short'],len(self.pos_feats_all))
-            pos_data = torch.stack(pos_feats_all[-nframes:],0).view(-1,feat_dim)
-            neg_data = torch.stack(neg_feats_all,0).view(-1,feat_dim)
-            train(self.model, criterion, update_optimizer, pos_data, neg_data, opts['maxiter_update'])
+            pos_data = torch.stack(self.pos_feats_all[-nframes:],0).view(-1,self.feat_dim)
+            neg_data = torch.stack(self.neg_feats_all,0).view(-1,self.feat_dim)
+            train(self.model, self.criterion, self.update_optimizer, pos_data, neg_data, opts['maxiter_update'])
 
         # Long term update
         elif 1 % opts['long_interval'] == 0:
-            pos_data = torch.stack(pos_feats_all,0).view(-1,feat_dim)
-            neg_data = torch.stack(neg_feats_all,0).view(-1,feat_dim)
-            train(self.model, criterion, update_optimizer, pos_data, neg_data, opts['maxiter_update'])
+            pos_data = torch.stack(self.pos_feats_all,0).view(-1,self.feat_dim)
+            neg_data = torch.stack(self.neg_feats_all,0).view(-1,self.feat_dim)
+            train(self.model, self.criterion, self.update_optimizer, pos_data, neg_data, opts['maxiter_update'])
 
 
-        # Result parsing and returning
+        dpi = 80.0
+
+        drawn = image
+
+
+        figsize = (8.0, 4.5)
+        fig = plt.figure(frameon=False, figsize=figsize, dpi=80.0)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        im = ax.imshow(drawn, aspect='normal')
+
+        test = self.result[self.frameNumber]
 
 
 
 
-        #spf = time.time()-tic
-        #spf_total += spf
-
-        # Display
-        #if display or savefig:
-            #im.set_data(image)
-
-            #start_point_center = {}
-            #start_point_center["x"] = ((gt[i,2]/2)+gt[i,0]) #x=x+(w/2)
-            #start_point_center["y"] = ((gt[i,3]/2)+gt[i,1]) #y=y+(h/2)
-            #start_point_center["h"] = START_POINT_HEIGHT
-            #start_point_center["w"] = START_POINT_WIDTH
 
 
-            # Setting the groundtruth_rect (start point, for me though.)
-            #gt_rect.set_xy([start_point_center["x"], start_point_center["y"]]) #setting x and y in array/list
-            #gt_rect.set_width(start_point_center["w"])
-            #gt_rect.set_height(start_point_center["h"])
+        rect = plt.Rectangle(tuple(test[0:2]),test[2],test[3],
+                linewidth=3, edgecolor="#ff0000", zorder=1, fill=False)
+        ax.add_patch(rect)
 
-            # Setting the tracked rectangle
-            #rect.set_xy(self.result_bb[i,:2])
-            #rect.set_width(self.result_bb[i,2])
-            #rect.set_height(self.result_bb[i,3])
+        plt.savefig("../result_fig/DragonBaby/img" + str(self.frameNumber) + ".jpg")
 
-
-            # @TODO
-            # use these coordinates to check the overlap
-
-            #if display:
-                #plt.pause(.01)
-                #plt.draw()
-            #if savefig:
-                #fig.savefig(os.path.join(savefig_dir,'%04d.jpg'%(i)),dpi=dpi)
-                #print("Saved figure ("+str(i).zfill(4)+".jpg).")
-
-            # Not printing overlap of gt_rect and rect because gt_rect serves the sole purpose of setting our starting point
-            #print "Frame %d/%d, Score %.3f, Time %.3f" % \
-            #(i, len(img_list), target_score, spf)
 
 
 

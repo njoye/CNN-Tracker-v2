@@ -33,7 +33,7 @@ def forward_samples(model, image, samples, out_layer='conv3'):
             regions = regions.cuda()
         feat = model(regions, out_layer=out_layer)
         if i==0:
-            feats = feat.data.clone() #somehow this f*cks up if there are certian groundtruth_rect.txt coordinates given (mine didn't work, TODO investigate this later)
+            feats = feat.data.clone() # this fails if the coordinates are out of bound
         else:
             feats = torch.cat((feats,feat.data.clone()),0)
     return feats
@@ -74,14 +74,13 @@ def train(model, criterion, optimizer, pos_feats, neg_feats, maxiter, in_layer='
         # select pos idx
         pos_next = pos_pointer+batch_pos
         pos_cur_idx = pos_idx[pos_pointer:pos_next]
-        print(pos_cur_idx)
-        pos_cur_idx = pos_feats.new(pos_cur_idx).long()
+        pos_cur_idx = pos_feats.new(pos_cur_idx.astype(float)).long()
         pos_pointer = pos_next
 
         # select neg idx
         neg_next = neg_pointer+batch_neg_cand
         neg_cur_idx = neg_idx[neg_pointer:neg_next]
-        neg_cur_idx = neg_feats.new(neg_cur_idx).long()
+        neg_cur_idx = neg_feats.new(neg_cur_idx.astype(float)).long()
         neg_pointer = neg_next
 
         # create batch
