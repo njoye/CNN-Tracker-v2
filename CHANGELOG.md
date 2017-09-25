@@ -22,3 +22,9 @@
 18/09/17
 - Async doesn't suck as much, thought the bug was async-related, was actually python3 related. So ... Python sucks (i guess?) -> fixed it though, ```iteritems()->items()```
 - Also want to note that OSX sucks. Trying this on a Windows computer now, if that doesn't work I'll install Ubuntu ...
+
+25/09/17
+- got a pc I can code on now
+- fixed a bug where numpy.int64 was given but float was needed
+- fixed some small bugs where class-specific variables weren't referenced properly
+- ran first frame-by-frame analyzation, worked out fine, but I broke the output somehow -> doesn't matter though
