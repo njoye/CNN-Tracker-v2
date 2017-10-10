@@ -28,3 +28,5 @@
 - fixed a bug where numpy.int64 was given but float was needed
 - fixed some small bugs where class-specific variables weren't referenced properly
 - ran first frame-by-frame analyzation, worked out fine, but I broke the output somehow -> doesn't matter though
+- did matter, because result didn't contain the result ... let's just use result_bb :)
+- tried running every 3rd frame, everything above fails after some time -> added a TODO to check whether the network has to get to know the object more at first

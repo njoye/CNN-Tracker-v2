@@ -113,4 +113,4 @@ def train(model, criterion, optimizer, pos_feats, neg_feats, maxiter, in_layer='
         torch.nn.utils.clip_grad_norm(model.parameters(), opts['grad_clip'])
         optimizer.step()
 
-        print("Iteration: %d, Loss: %.4f" % (iter, loss.data[0])) #Printing training iteration and loss
+        #print("Iteration: %d, Loss: %.4f" % (iter, loss.data[0])) #Printing training iteration and loss

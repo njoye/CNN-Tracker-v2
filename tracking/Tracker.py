@@ -34,6 +34,10 @@ from gen_config import *
 # Own
 from TrackerUtils import *
 
+cv2.namedWindow("image", cv2.WINDOW_NORMAL)
+
+
+
 np.random.seed(123)
 torch.manual_seed(456)
 
@@ -98,12 +102,6 @@ class Tracker:
 
         self.frameNumber = 0
 
-        print("inited")
-        pass
-
-    def test(self):
-        print("classtest")
-
     # Initiates the tracker with either coordinates["start"] or given parameters
     #, x1=coordinates["start"]["x1"], y1=coordinates["start"]["y1"], x2=coordinates["start"]["x2"], y2=coordinates["start"]["y2"]
     def startTracking(self, frame, init_bbox):
@@ -116,8 +114,6 @@ class Tracker:
 
         self.result[0] = self.target_bbox
         self.result_bb[0] = self.target_bbox
-
-        print("wat")
 
         # Init model
         self.model = MDNet(opts['model_path'])
@@ -185,37 +181,7 @@ class Tracker:
         self.pos_feats_all = [pos_feats[:opts['n_pos_update']]]
         self.neg_feats_all = [neg_feats[:opts['n_neg_update']]]
 
-        #print(self.result)
-        #print(self.result_bb)
-
-
         return True #self.result and self.result_bbox are already saved in this class, no reason to return them then
-        #spf_total = time.time()-tic
-
-        # Display disabled for now
-        # this uses result and result_bb to draw a box around the starting point
-        #savefig = savefig_dir != ''
-        #if display or savefig:
-            #dpi = 80.0
-            #figsize = (image.size[0]/dpi, image.size[1]/dpi)
-
-            #fig = plt.figure(frameon=False, figsize=figsize, dpi=dpi)
-            #ax = plt.Axes(fig, [0., 0., 1., 1.])
-            #ax.set_axis_off()
-            #fig.add_axes(ax)
-            #im = ax.imshow(image, aspect='normal')
-
-            #if gt is not None:
-            #    gt_rect = plt.Rectangle(tuple(gt[0,:2]),gt[0,2],gt[0,3],
-            #            linewidth=3, edgecolor="#00ff00", zorder=1, fill=False)
-            #    ax.add_patch(gt_rect)
-
-            #rect = plt.Rectangle(tuple(self.result_bb[0,:2]),self.result_bb[0,2],self.result_bb[0,3],
-            #        linewidth=3, edgecolor="#ff0000", zorder=1, fill=False)
-            #ax.add_patch(rect)
-
-
-
 
 
     # Updates the frame, runs the network over it, returns the location (if there is any)
@@ -232,7 +198,7 @@ class Tracker:
         target_score = top_scores.mean()
         self.target_bbox = samples[top_idx].mean(axis=0)
 
-        print(self.target_bbox)
+        #print(self.target_bbox)
 
 
 
@@ -259,7 +225,7 @@ class Tracker:
             # Doing the normal threshold comparison since this is the non-emergency mode
             success = target_score > opts['success_thr']
 
-
+        print(target_score)
         print("Success:", success)
         # Expand search area at failure
         if success:
@@ -283,8 +249,8 @@ class Tracker:
             self.target_bbox = self.result[frameNumber-1]
             self.bbreg_bbox = self.result_bb[frameNumber-1]
 
-        # Increase the length of self.result and self.result_bb when the maxmimum has been hit
         if frameNumber >= len(self.result):
+            # Increase the length of self.result and self.result_bb when the maxmimum has been hit
             self.result = np.append(self.result,[[0,0,0,0]], axis=0) #adding a new row as soon as we hit the end, that way we have place for the current result
             self.result_bb = np.append(self.result_bb,[[0,0,0,0]], axis=0)
 
@@ -314,6 +280,7 @@ class Tracker:
 
         # Short term update
         if not success:
+            print("not success")
             nframes = min(opts['n_frames_short'],len(self.pos_feats_all))
             pos_data = torch.stack(self.pos_feats_all[-nframes:],0).view(-1,self.feat_dim)
             neg_data = torch.stack(self.neg_feats_all,0).view(-1,self.feat_dim)
@@ -325,32 +292,39 @@ class Tracker:
             neg_data = torch.stack(self.neg_feats_all,0).view(-1,self.feat_dim)
             train(self.model, self.criterion, self.update_optimizer, pos_data, neg_data, opts['maxiter_update'])
 
+        #display on console
+
+        #print(self.result_bb)
+
+
 
         dpi = 80.0
 
         drawn = image
-
 
         figsize = (8.0, 4.5)
         fig = plt.figure(frameon=False, figsize=figsize, dpi=80.0)
         ax = plt.Axes(fig, [0., 0., 1., 1.])
         ax.set_axis_off()
         fig.add_axes(ax)
-        im = ax.imshow(drawn, aspect='normal')
 
-        test = self.result[self.frameNumber]
+        print(drawn)
 
+        im = ax.imshow(drawn, aspect='auto')
 
-
-
-
+        test = self.result_bb[self.frameNumber]
 
         rect = plt.Rectangle(tuple(test[0:2]),test[2],test[3],
                 linewidth=3, edgecolor="#ff0000", zorder=1, fill=False)
+
         ax.add_patch(rect)
 
-        plt.savefig("../result_fig/DragonBaby/img" + str(self.frameNumber) + ".jpg")
 
+        print(drawn)
+        plt.savefig("../result_fig/output/img" + str(self.frameNumber) + ".jpg")
+        image=cv2.imread("../result_fig/output/img" + str(self.frameNumber) + ".jpg")
+        cv2.imshow("image", image)
+        cv2.waitKey(0)
 
 
 

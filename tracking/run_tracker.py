@@ -92,8 +92,8 @@ TRACK_CLASSES = ["car", "bus", "truck", "person"] #we got a traffic video so, le
 # 1. implement emergency mode - ✓
 # 2. find a way to use a pretrained model, so that it doesn't retrain at every start - ✓ (i'm ... i've not been smart (;)) and didn't understand what "train" actually meant ..)
 # 3. Create a tracker class, in which variables are set after each tick, you have getters/setters, easily maintainable, ...
-#                                                                                                  ^^ haha sure ^^
-
+# 4. Integrate a "fake" or "general" frame counter so that everything is still ordered even if we only analyze every third frame                                                                                                 ^^ haha sure ^^
+# 5. Check if the tracker acts better for low frame videos (every 10th/20th) if it gets to know the object better at first (first 10-20 frames every frame, then only the 10th, etc.)
 
 
 def run_mdnet(img_list, init_bbox, gt=None, savefig_dir='', display=False):
@@ -176,6 +176,7 @@ def run_mdnet(img_list, init_bbox, gt=None, savefig_dir='', display=False):
         ax.set_axis_off()
         fig.add_axes(ax)
         im = ax.imshow(image, aspect='normal')
+
 
         if gt is not None:
             gt_rect = plt.Rectangle(tuple(gt[0,:2]),gt[0,2],gt[0,3],
@@ -387,9 +388,12 @@ if __name__ == "__main__":
     i=1
 
     #iterating through all the pictures (temp)
+    gen_frame_counter = 1
     while i < len(img_list):
-        tracker.updateFrame(img_list[i], i)
-        i=i+1
+        tracker.updateFrame(img_list[i], gen_frame_counter)
+        i=i+2
+        gen_frame_counter = gen_frame_counter +1
+
 
     #pool = mp.Pool()
 
